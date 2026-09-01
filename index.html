@@ -467,6 +467,7 @@
             margin: -2px 0;
             display: flex;
             align-items: center;
+            touch-action: none; /* Ngăn trình duyệt cuộn trang khi đang kéo thanh tua */
         }
 
         .music-progress-bar {
@@ -527,6 +528,7 @@
             height: 4px;
             accent-color: #fff;
             background: transparent;
+            touch-action: none;
         }
 
         /* FOOTER DƯỚI CÙNG */
@@ -771,10 +773,7 @@
                 mouseX = e.touches[0].clientX;
                 mouseY = e.touches[0].clientY;
             }
-            if (e.cancelable) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+        }, { passive: true });
 
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length > 0) {
@@ -827,7 +826,6 @@
         bgAudio.volume = 0.5;
         let lastVolume = 0.5;
 
-        // Xử lý nút Mute / Unmute khi bấm vào icon cái loa
         muteBtn.addEventListener('click', () => {
             if (bgAudio.volume > 0) {
                 lastVolume = bgAudio.volume;
@@ -841,7 +839,6 @@
             }
         });
 
-        // Xử lý khi kéo thanh âm lượng thủ công
         volumeSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             bgAudio.volume = val;
@@ -915,9 +912,14 @@
 
         let isDragging = false;
 
-        function updateProgressFromMouse(e) {
+        function getClientX(e) {
+            return e.touches ? e.touches[0].clientX : e.clientX;
+        }
+
+        function updateProgressFromEvent(e) {
             const rect = progressWrap.getBoundingClientRect();
-            let clickX = e.clientX - rect.left;
+            let clientX = getClientX(e);
+            let clickX = clientX - rect.left;
             if (clickX < 0) clickX = 0;
             if (clickX > rect.width) clickX = rect.width;
             
@@ -930,22 +932,35 @@
             }
         }
 
+        // Hỗ trợ chuột và cảm ứng cho thanh tua nhạc
         progressWrap.addEventListener('mousedown', (e) => {
             isDragging = true;
-            updateProgressFromMouse(e);
+            updateProgressFromEvent(e);
         });
+
+        progressWrap.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            updateProgressFromEvent(e);
+        }, { passive: true });
 
         window.addEventListener('mousemove', (e) => {
             if (isDragging) {
-                updateProgressFromMouse(e);
+                updateProgressFromEvent(e);
             }
         });
 
-        window.addEventListener('mouseup', (e) => {
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                updateProgressFromEvent(e);
+            }
+        }, { passive: true });
+
+        function stopDragging(e) {
             if (isDragging) {
                 isDragging = false;
                 const rect = progressWrap.getBoundingClientRect();
-                let clickX = e.clientX - rect.left;
+                let clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+                let clickX = clientX - rect.left;
                 if (clickX < 0) clickX = 0;
                 if (clickX > rect.width) clickX = rect.width;
                 
@@ -953,7 +968,10 @@
                     bgAudio.currentTime = (clickX / rect.width) * bgAudio.duration;
                 }
             }
-        });
+        }
+
+        window.addEventListener('mouseup', stopDragging);
+        window.addEventListener('touchend', stopDragging);
 
         bgAudio.addEventListener('timeupdate', () => {
             if (!isDragging && bgAudio.duration) {
